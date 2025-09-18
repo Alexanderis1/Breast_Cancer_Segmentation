@@ -1,0 +1,8 @@
+Final Evaluation Metrics:
+========================================
+Auc: 0.9278
+Sensitivity: 0.8224
+Specificity: 0.8355
+Accuracy: 0.8289
+Precision malignant: 0.8333
+Recall malignant: 0.8224
