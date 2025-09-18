@@ -1,4 +1,4 @@
-# Breast_Cancer_Segmentation
+# AI.3 Breast Cancer Diagnosis Project
 **Medical Robotics Project 2025**
 
 ## Dataset Examples
