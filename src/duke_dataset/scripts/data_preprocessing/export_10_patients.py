@@ -12,7 +12,7 @@ EXPORT_DIR = os.path.join(OUT_DIR, 'exported_10_patients_v5')
 NUM_PATIENTS = 10
 
 def load_all_data():
-    """Load all Excel and CSV files with proper multi-level header handling"""
+    """Load all Excel and CSV files with proper error handling"""
     data = {}
     
     print(f"Loading data files from: {DATA_DIR}\n")
@@ -21,31 +21,33 @@ def load_all_data():
         print(f"ERROR: DATA_DIR does not exist: {DATA_DIR}")
         return {}
     
-    # Excel files - NOTE: Clinical and Imaging features have multi-level headers
+    # Excel files - IMPORTANT: Clinical and Imaging features have TWO header rows
+    # Row 0: Category headers (Patient Information, MRI Technical Information, etc.)
+    # Row 1: Actual column names (Patient ID, Days to MRI, etc.)
     excel_files = {
         'annotation_boxes': {
             'file': 'Annotation_Boxes.xlsx',
-            'header': 0,  # Single header row
+            'header_row': 0,  # Single header row
             'expected_cols': ['Patient ID', 'Start Row', 'End Row', 'Start Column', 'End Column', 'Start Slice', 'End Slice']
         },
         'density_assessments': {
             'file': 'Breast_Radiologist_Density_Assessments.xlsx',
-            'header': 0,
+            'header_row': 0,  # Single header row
             'expected_cols': ['Subject_ID', 'Radiologist A', 'Radiologist B', 'Radiologist C']
         },
         'filepath_mapping': {
             'file': 'Breast-Cancer-MRI-filepath_filename-mapping.xlsx',
-            'header': 0,
+            'header_row': 0,  # Single header row
             'expected_cols': ['sop_instance_UID', 'original_path_and_filename']
         },
         'clinical_features': {
             'file': 'Clinical_and_Other_Features.xlsx',
-            'header': 1,  # SECOND ROW IS THE ACTUAL HEADER
+            'header_row': 1,  # USE SECOND ROW (index 1) as column names
             'expected_cols': ['Patient ID']
         },
         'imaging_features': {
             'file': 'Imaging_Features.xlsx',
-            'header': 1,  # SECOND ROW IS THE ACTUAL HEADER
+            'header_row': 0,  # USE SECOND ROW (index 1) as column names
             'expected_cols': ['Patient ID']
         }
     }
@@ -54,16 +56,27 @@ def load_all_data():
         file_path = os.path.join(DATA_DIR, config['file'])
         if os.path.exists(file_path):
             try:
-                # Use the correct header row
-                df = pd.read_excel(file_path, header=config['header'])
+                # Use the specified header row from config
+                df = pd.read_excel(file_path, header=config['header_row'])
                 data[key] = df
                 print(f"✓ Loaded {key}: {len(df)} rows, {len(df.columns)} columns")
-                print(f"  Columns (first 10): {df.columns.tolist()[:10]}")
+                print(f"  Using header row: {config['header_row']}")
                 
-                # Show sample patient IDs
+                # Verify expected columns
+                missing_cols = [col for col in config['expected_cols'] if col not in df.columns]
+                if missing_cols:
+                    print(f"  WARNING: Missing expected columns: {missing_cols}")
+                
+                # Show first few column names for verification
+                print(f"  Columns: {df.columns.tolist()[:5]}...")
+                
+                # Show sample patient IDs if Patient ID column exists
                 if 'Patient ID' in df.columns:
                     sample_ids = df['Patient ID'].dropna().head(3).tolist()
                     print(f"  Sample Patient IDs: {sample_ids}")
+                elif 'Subject_ID' in df.columns:
+                    sample_ids = df['Subject_ID'].dropna().head(3).tolist()
+                    print(f"  Sample Subject IDs: {sample_ids}")
                     
             except Exception as e:
                 print(f"✗ Error loading {config['file']}: {e}")
@@ -72,7 +85,7 @@ def load_all_data():
             print(f"✗ File not found: {config['file']}")
             data[key] = pd.DataFrame()
     
-    # CSV files remain the same
+    # CSV files
     csv_files = {
         'segmentation_mapping': 'segmentation_filepath_mapping.csv',
         'train_ids': 'train_ids.csv',
@@ -95,7 +108,6 @@ def load_all_data():
             data[key] = pd.DataFrame()
     
     return data
-
 
 def get_available_patients():
     """Get list of all available patient IDs from directory structure"""
@@ -274,12 +286,23 @@ def extract_mri_file_mappings(patient_id, df):
 
 def extract_segmentation_files(patient_id, df):
     """Extract segmentation file mappings for a patient"""
-    if df.empty or 'Patient ID' not in df.columns:
+    if df.empty:
+        return [], []
+    
+    # Handle potential column name typo (atient ID vs Patient ID)
+    patient_col = None
+    for col in df.columns:
+        if 'patient' in col.lower() and 'id' in col.lower():
+            patient_col = col
+            break
+    
+    if patient_col is None:
         return [], []
     
     variations = format_patient_id_variations(patient_id)
     
-    mask = df['Patient ID'] == variations['full_format']
+    # Match using full format (most common in segmentation file)
+    mask = df[patient_col] == variations['full_format']
     
     if mask.any():
         seg_data = df[mask]
