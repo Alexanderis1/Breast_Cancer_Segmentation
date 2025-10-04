@@ -7,6 +7,8 @@ from pathlib import Path
 
 # Dataset paths
 DATA_DIR = '/mnt/c/Users/35193/Desktop/duke_dataset/data'
+SEGMENTATION_DIR_V2 = '/mnt/c/Users/35193/Desktop/duke_dataset/data/PKG - Duke-Breast-Cancer-MRI-Supplement-v2/Duke-Breast-Cancer-MRI-Supplement-v2/Segmentation_Masks_NRRD'
+SEGMENTATION_DIR_V3 = '/mnt/c/Users/35193/Desktop/duke_dataset/data/PKG - Duke-Breast-Cancer-MRI-Supplement-v3/Duke-Breast-Cancer-MRI-Supplement-v3/Segmentation_Masks_NRRD'
 OUT_DIR = os.getcwd()
 EXPORT_DIR = os.path.join(OUT_DIR, 'exported_10_patients_v5')
 NUM_PATIENTS = 10
@@ -312,6 +314,135 @@ def extract_segmentation_files(patient_id, df):
     
     return [], []
 
+def extract_nrrd_segmentation_masks(patient_id):
+    """Extract NRRD segmentation masks from both v2 and v3 data structures"""
+    normalized_id = normalize_patient_id(patient_id)
+    variations = format_patient_id_variations(normalized_id)
+    
+    segmentation_data = {
+        'v2_masks': {'breast_masks': {'train': [], 'test': []}, 'dense_tissue_masks': {'train': [], 'test': []}},
+        'v3_masks': {'breast_masks': [], 'dense_and_vessels_masks': []},
+        'found_masks': False,
+        'data_versions': []
+    }
+    
+    # === V2 Data Structure ===
+    if os.path.exists(SEGMENTATION_DIR_V2):
+        v2_categories = {
+            'breast_train': 'breast_masks.train',
+            'breast_test': 'breast_masks.test', 
+            'dense_tissue_train': 'dense_tissue_masks.train',
+            'dense_tissue_test': 'dense_tissue_masks.test'
+        }
+        
+        v2_found = False
+        for category, data_path in v2_categories.items():
+            category_dir = os.path.join(SEGMENTATION_DIR_V2, category)
+            if not os.path.exists(category_dir):
+                continue
+                
+            for filename in os.listdir(category_dir):
+                if filename.lower().endswith('.nrrd'):
+                    for var_value in variations.values():
+                        if var_value.lower() in filename.lower():
+                            file_path = os.path.join(category_dir, filename)
+                            file_info = {
+                                'filename': filename,
+                                'full_path': file_path,
+                                'category': category,
+                                'data_version': 'v2',
+                                'file_size': os.path.getsize(file_path) if os.path.exists(file_path) else 0
+                            }
+                            
+                            if 'breast_masks' in data_path:
+                                if 'train' in data_path:
+                                    segmentation_data['v2_masks']['breast_masks']['train'].append(file_info)
+                                else:
+                                    segmentation_data['v2_masks']['breast_masks']['test'].append(file_info)
+                            else:
+                                if 'train' in data_path:
+                                    segmentation_data['v2_masks']['dense_tissue_masks']['train'].append(file_info)
+                                else:
+                                    segmentation_data['v2_masks']['dense_tissue_masks']['test'].append(file_info)
+                            
+                            v2_found = True
+                            break
+        
+        if v2_found:
+            segmentation_data['data_versions'].append('v2')
+            segmentation_data['found_masks'] = True
+    
+    # === V3 Data Structure ===
+    if os.path.exists(SEGMENTATION_DIR_V3):
+        patient_dir_v3 = os.path.join(SEGMENTATION_DIR_V3, variations['full_format'])
+        
+        if os.path.exists(patient_dir_v3):
+            v3_found = False
+            
+            # Look for breast mask
+            breast_mask_pattern = f"Segmentation_{variations['full_format']}_Breast.seg.nrrd"
+            breast_mask_path = os.path.join(patient_dir_v3, breast_mask_pattern)
+            
+            if os.path.exists(breast_mask_path):
+                file_info = {
+                    'filename': breast_mask_pattern,
+                    'full_path': breast_mask_path,
+                    'mask_type': 'breast',
+                    'data_version': 'v3',
+                    'file_size': os.path.getsize(breast_mask_path)
+                }
+                segmentation_data['v3_masks']['breast_masks'].append(file_info)
+                v3_found = True
+            
+            # Look for dense tissue and vessels mask
+            dense_vessels_mask_pattern = f"Segmentation_{variations['full_format']}_Dense_and_Vessels.seg.nrrd"
+            dense_vessels_mask_path = os.path.join(patient_dir_v3, dense_vessels_mask_pattern)
+            
+            if os.path.exists(dense_vessels_mask_path):
+                file_info = {
+                    'filename': dense_vessels_mask_pattern,
+                    'full_path': dense_vessels_mask_path,
+                    'mask_type': 'dense_and_vessels',
+                    'data_version': 'v3',
+                    'file_size': os.path.getsize(dense_vessels_mask_path)
+                }
+                segmentation_data['v3_masks']['dense_and_vessels_masks'].append(file_info)
+                v3_found = True
+            
+            if v3_found:
+                segmentation_data['data_versions'].append('v3')
+                segmentation_data['found_masks'] = True
+    
+    # Calculate summary statistics
+    v2_total = (len(segmentation_data['v2_masks']['breast_masks']['train']) + 
+               len(segmentation_data['v2_masks']['breast_masks']['test']) +
+               len(segmentation_data['v2_masks']['dense_tissue_masks']['train']) + 
+               len(segmentation_data['v2_masks']['dense_tissue_masks']['test']))
+    
+    v3_total = (len(segmentation_data['v3_masks']['breast_masks']) + 
+               len(segmentation_data['v3_masks']['dense_and_vessels_masks']))
+    
+    segmentation_data['summary'] = {
+        'total_nrrd_masks': v2_total + v3_total,
+        'v2_masks_count': v2_total,
+        'v3_masks_count': v3_total,
+        'data_versions_found': segmentation_data['data_versions'],
+        'has_breast_masks': (len(segmentation_data['v2_masks']['breast_masks']['train']) + 
+                            len(segmentation_data['v2_masks']['breast_masks']['test']) + 
+                            len(segmentation_data['v3_masks']['breast_masks'])) > 0,
+        'has_dense_tissue_masks': (len(segmentation_data['v2_masks']['dense_tissue_masks']['train']) + 
+                                  len(segmentation_data['v2_masks']['dense_tissue_masks']['test']) + 
+                                  len(segmentation_data['v3_masks']['dense_and_vessels_masks'])) > 0,
+        'mask_types': []
+    }
+    
+    if segmentation_data['summary']['has_breast_masks']:
+        segmentation_data['summary']['mask_types'].append('breast')
+    if segmentation_data['summary']['has_dense_tissue_masks']:
+        segmentation_data['summary']['mask_types'].append('dense_tissue_vessels')
+    
+    return segmentation_data
+
 def get_dataset_split(patient_id, train_df, test_df):
     """Determine if patient is in train or test split"""
     variations = format_patient_id_variations(patient_id)
@@ -346,6 +477,7 @@ def extract_patient_data(patient_id, all_data):
     density = extract_density_assessment(normalized_id, all_data['density_assessments'])
     mri_files = extract_mri_file_mappings(normalized_id, all_data['filepath_mapping'])
     seg_files, seg_labels = extract_segmentation_files(normalized_id, all_data['segmentation_mapping'])
+    nrrd_segmentation = extract_nrrd_segmentation_masks(normalized_id)
     split = get_dataset_split(normalized_id, all_data['train_ids'], all_data['test_ids'])
     
     # Create annotation summary
@@ -374,6 +506,7 @@ def extract_patient_data(patient_id, all_data):
         'mri_files': mri_files,
         'segmentation_files': seg_files,
         'segmentation_labels': seg_labels,
+        'nrrd_segmentation_masks': nrrd_segmentation,
         'dataset_split': split
     }
     
@@ -385,9 +518,19 @@ def extract_patient_data(patient_id, all_data):
         print(f"      Total annotated volume: {annotation_summary['total_volume']} voxels")
     print(f"    Density assessment: {'✓' if density else '✗'} ({len(density)} fields)")
     print(f"    MRI file mappings: {'✓' if mri_files else '✗'} ({len(mri_files)} files)")
-    print(f"    Segmentation files: {'✓' if seg_files else '✗'} ({len(seg_files)} files)")
+    print(f"    Segmentation files (CSV): {'✓' if seg_files else '✗'} ({len(seg_files)} files)")
     if seg_labels:
         print(f"      Labels: {seg_labels}")
+    nrrd_total = nrrd_segmentation['summary']['total_nrrd_masks'] if nrrd_segmentation['found_masks'] else 0
+    nrrd_versions = ', '.join(nrrd_segmentation['summary']['data_versions_found']) if nrrd_segmentation['found_masks'] else ''
+    print(f"    NRRD Segmentation masks: {'✓' if nrrd_segmentation['found_masks'] else '✗'} ({nrrd_total} masks)")
+    if nrrd_segmentation['found_masks']:
+        print(f"      Data versions: {nrrd_versions}")
+        print(f"      Mask types: {', '.join(nrrd_segmentation['summary']['mask_types'])}")
+        if nrrd_segmentation['summary']['v2_masks_count'] > 0:
+            print(f"      v2 masks: {nrrd_segmentation['summary']['v2_masks_count']}")
+        if nrrd_segmentation['summary']['v3_masks_count'] > 0:
+            print(f"      v3 masks: {nrrd_segmentation['summary']['v3_masks_count']}")
     print(f"    Dataset split: {split}")
     
     return patient_data
@@ -453,6 +596,106 @@ def copy_mri_files(patient_id, export_patient_dir, max_files=20):
     
     return copied_count
 
+def copy_nrrd_segmentation_masks(patient_id, export_patient_dir, nrrd_data):
+    """Copy NRRD segmentation masks from both v2 and v3 data structures"""
+    if not nrrd_data['found_masks']:
+        return 0
+    
+    seg_export_dir = os.path.join(export_patient_dir, 'Segmentation_Masks_NRRD')
+    os.makedirs(seg_export_dir, exist_ok=True)
+    
+    copied_count = 0
+    
+    try:
+        # Copy v2 format masks
+        if 'v2' in nrrd_data['data_versions']:
+            # Copy breast masks
+            for split in ['train', 'test']:
+                for mask_info in nrrd_data['v2_masks']['breast_masks'][split]:
+                    try:
+                        src_path = mask_info['full_path']
+                        dst_filename = f"v2_breast_{split}_{mask_info['filename']}"
+                        dst_path = os.path.join(seg_export_dir, dst_filename)
+                        shutil.copy2(src_path, dst_path)
+                        copied_count += 1
+                    except Exception as e:
+                        print(f"      Failed to copy v2 breast mask {mask_info['filename']}: {e}")
+            
+            # Copy dense tissue masks  
+            for split in ['train', 'test']:
+                for mask_info in nrrd_data['v2_masks']['dense_tissue_masks'][split]:
+                    try:
+                        src_path = mask_info['full_path']
+                        dst_filename = f"v2_dense_tissue_{split}_{mask_info['filename']}"
+                        dst_path = os.path.join(seg_export_dir, dst_filename)
+                        shutil.copy2(src_path, dst_path)
+                        copied_count += 1
+                    except Exception as e:
+                        print(f"      Failed to copy v2 dense tissue mask {mask_info['filename']}: {e}")
+        
+        # Copy v3 format masks
+        if 'v3' in nrrd_data['data_versions']:
+            # Copy breast masks
+            for mask_info in nrrd_data['v3_masks']['breast_masks']:
+                try:
+                    src_path = mask_info['full_path']
+                    dst_filename = f"v3_{mask_info['filename']}"
+                    dst_path = os.path.join(seg_export_dir, dst_filename)
+                    shutil.copy2(src_path, dst_path)
+                    copied_count += 1
+                except Exception as e:
+                    print(f"      Failed to copy v3 breast mask {mask_info['filename']}: {e}")
+            
+            # Copy dense tissue and vessels masks
+            for mask_info in nrrd_data['v3_masks']['dense_and_vessels_masks']:
+                try:
+                    src_path = mask_info['full_path']
+                    dst_filename = f"v3_{mask_info['filename']}"
+                    dst_path = os.path.join(seg_export_dir, dst_filename)
+                    shutil.copy2(src_path, dst_path)
+                    copied_count += 1
+                except Exception as e:
+                    print(f"      Failed to copy v3 dense+vessels mask {mask_info['filename']}: {e}")
+        
+        # Save comprehensive segmentation summary
+        seg_summary = {
+            'total_copied_masks': copied_count,
+            'data_versions_found': nrrd_data['data_versions'],
+            'v2_data': {
+                'breast_train': len(nrrd_data['v2_masks']['breast_masks']['train']),
+                'breast_test': len(nrrd_data['v2_masks']['breast_masks']['test']),
+                'dense_tissue_train': len(nrrd_data['v2_masks']['dense_tissue_masks']['train']),
+                'dense_tissue_test': len(nrrd_data['v2_masks']['dense_tissue_masks']['test']),
+                'source_directory': SEGMENTATION_DIR_V2
+            },
+            'v3_data': {
+                'breast_masks': len(nrrd_data['v3_masks']['breast_masks']),
+                'dense_and_vessels_masks': len(nrrd_data['v3_masks']['dense_and_vessels_masks']),
+                'source_directory': SEGMENTATION_DIR_V3
+            },
+            'file_naming_conventions': {
+                'v2': 'v2_{mask_type}_{split}_{original_filename}',
+                'v3': 'v3_{original_filename}'
+            },
+            'mask_descriptions': {
+                'v2_breast': 'Breast tissue masks from v2 dataset (split by train/test)',
+                'v2_dense_tissue': 'Dense tissue masks from v2 dataset (split by train/test)',
+                'v3_breast': 'Breast tissue masks from v3 dataset (individual patient folders)',
+                'v3_dense_and_vessels': 'Combined dense tissue and blood vessel masks from v3 dataset'
+            }
+        }
+        
+        with open(os.path.join(seg_export_dir, 'segmentation_summary.json'), 'w') as f:
+            json.dump(seg_summary, f, indent=2)
+        
+        versions_str = ', '.join(nrrd_data['data_versions'])
+        print(f"    Copied {copied_count} NRRD segmentation masks (from {versions_str})")
+        
+    except Exception as e:
+        print(f"    Error copying NRRD masks: {e}")
+    
+    return copied_count
+
 def export_patients(selected_patients, all_data):
     """Export complete data for selected patients"""
     os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -484,6 +727,10 @@ def export_patients(selected_patients, all_data):
             copied_files = copy_mri_files(patient_id, patient_dir)
             patient_data['copied_dicom_files'] = copied_files
             
+            # Copy NRRD segmentation masks
+            copied_masks = copy_nrrd_segmentation_masks(patient_id, patient_dir, patient_data['nrrd_segmentation_masks'])
+            patient_data['copied_nrrd_masks'] = copied_masks
+            
             exported_patients[normalized_id] = patient_data
             print(f"  ✓ Successfully exported Patient {normalized_id}\n")
             
@@ -499,6 +746,10 @@ def export_patients(selected_patients, all_data):
         # CSV summary
         summary_data = []
         for patient_id, data in exported_patients.items():
+            nrrd_summary = data['nrrd_segmentation_masks']['summary'] if data['nrrd_segmentation_masks']['found_masks'] else {
+                'total_nrrd_masks': 0, 'mask_types': [], 'data_versions_found': [], 'v2_masks_count': 0, 'v3_masks_count': 0
+            }
+            
             summary_row = {
                 'Patient_ID': patient_id,
                 'Patient_ID_Full': data['patient_id_full'],
@@ -514,7 +765,14 @@ def export_patients(selected_patients, all_data):
                 'Num_MRI_File_Mappings': len(data['mri_files']),
                 'Num_Segmentation_Files': len(data['segmentation_files']),
                 'Segmentation_Labels': ', '.join(data['segmentation_labels']),
-                'Copied_DICOM_Files': data.get('copied_dicom_files', 0)
+                'Copied_DICOM_Files': data.get('copied_dicom_files', 0),
+                'Has_NRRD_Masks': bool(data['nrrd_segmentation_masks']['found_masks']),
+                'Total_NRRD_Masks': nrrd_summary['total_nrrd_masks'],
+                'NRRD_Data_Versions': ', '.join(nrrd_summary['data_versions_found']),
+                'NRRD_v2_Masks': nrrd_summary['v2_masks_count'],
+                'NRRD_v3_Masks': nrrd_summary['v3_masks_count'],
+                'NRRD_Mask_Types': ', '.join(nrrd_summary['mask_types']),
+                'Copied_NRRD_Masks': data.get('copied_nrrd_masks', 0)
             }
             summary_data.append(summary_row)
         
@@ -570,6 +828,7 @@ def main():
     print(f"\nEach patient folder contains:")
     print("  - patient_data.json (comprehensive data)")
     print("  - MRI_DICOM_sample/ (sample DICOM files + inventory)")
+    print("  - Segmentation_Masks_NRRD/ (NRRD segmentation masks + summary)")
     print(f"\nSummary files:")
     print("  - all_patients_summary.json")
     print("  - export_summary.csv")
