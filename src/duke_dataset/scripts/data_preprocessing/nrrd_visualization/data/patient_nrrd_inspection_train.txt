@@ -1,0 +1,56 @@
+======================================================================
+INSPECTING NRRD FILES - TRAIN
+======================================================================
+
+Patient: Patient_020
+
+Found 6 NRRD files:
+
+1. v2_breast_train_Breast_MRI_020_pre_001.nrrd
+   Shape: (512, 512, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.1079, Std: 0.3102
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+2. v2_breast_train_Breast_MRI_020_pre_096.nrrd
+   Shape: (512, 512, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.2752, Std: 0.4466
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+3. v2_breast_train_Breast_MRI_020_pre_130.nrrd
+   Shape: (512, 512, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.2637, Std: 0.4406
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+4. v2_dense_tissue_train_Breast_MRI_020_pre_096.nrrd
+   Shape: (512, 512, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.0081, Std: 0.0896
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+5. v2_dense_tissue_train_Breast_MRI_020_pre_130.nrrd
+   Shape: (512, 512, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.0029, Std: 0.0541
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+6. v2_dense_tissue_train_Breast_MRI_020_pre_151.nrrd
+   Shape: (512, 512, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.0003, Std: 0.0166
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+

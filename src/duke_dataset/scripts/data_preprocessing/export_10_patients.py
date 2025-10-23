@@ -10,8 +10,9 @@ DATA_DIR = '/mnt/c/Users/35193/Desktop/duke_dataset/data'
 SEGMENTATION_DIR_V2 = '/mnt/c/Users/35193/Desktop/duke_dataset/data/PKG - Duke-Breast-Cancer-MRI-Supplement-v2/Duke-Breast-Cancer-MRI-Supplement-v2/Segmentation_Masks_NRRD'
 SEGMENTATION_DIR_V3 = '/mnt/c/Users/35193/Desktop/duke_dataset/data/PKG - Duke-Breast-Cancer-MRI-Supplement-v3/Duke-Breast-Cancer-MRI-Supplement-v3/Segmentation_Masks_NRRD'
 OUT_DIR = os.getcwd()
-EXPORT_DIR = os.path.join(OUT_DIR, 'exported_10_patients_v5')
-NUM_PATIENTS = 10
+EXPORT_DIR = os.path.join(OUT_DIR, 'exported_10_patients')
+NUM_TRAIN_PATIENTS = 20
+NUM_TEST_PATIENTS = 5
 
 def load_all_data():
     """Load all Excel and CSV files with proper error handling"""
@@ -23,23 +24,23 @@ def load_all_data():
         print(f"ERROR: DATA_DIR does not exist: {DATA_DIR}")
         return {}
     
-    # Excel files - IMPORTANT: Clinical and Imaging features have TWO header rows
+    # Excel files - Clinical features have TWO header rows
     # Row 0: Category headers (Patient Information, MRI Technical Information, etc.)
     # Row 1: Actual column names (Patient ID, Days to MRI, etc.)
     excel_files = {
         'annotation_boxes': {
             'file': 'Annotation_Boxes.xlsx',
-            'header_row': 0,  # Single header row
+            'header_row': 0,  
             'expected_cols': ['Patient ID', 'Start Row', 'End Row', 'Start Column', 'End Column', 'Start Slice', 'End Slice']
         },
         'density_assessments': {
             'file': 'Breast_Radiologist_Density_Assessments.xlsx',
-            'header_row': 0,  # Single header row
+            'header_row': 0, 
             'expected_cols': ['Subject_ID', 'Radiologist A', 'Radiologist B', 'Radiologist C']
         },
         'filepath_mapping': {
             'file': 'Breast-Cancer-MRI-filepath_filename-mapping.xlsx',
-            'header_row': 0,  # Single header row
+            'header_row': 0, 
             'expected_cols': ['sop_instance_UID', 'original_path_and_filename']
         },
         'clinical_features': {
@@ -49,7 +50,7 @@ def load_all_data():
         },
         'imaging_features': {
             'file': 'Imaging_Features.xlsx',
-            'header_row': 0,  # USE SECOND ROW (index 1) as column names
+            'header_row': 0,  
             'expected_cols': ['Patient ID']
         }
     }
@@ -343,8 +344,11 @@ def extract_nrrd_segmentation_masks(patient_id):
                 
             for filename in os.listdir(category_dir):
                 if filename.lower().endswith('.nrrd'):
+                    # For V2, use more precise matching to avoid false positives
+                    # V2 files follow pattern: Breast_MRI_XXX_pre_YYY.nrrd
                     for var_value in variations.values():
-                        if var_value.lower() in filename.lower():
+                        # Check if filename contains the exact patient format
+                        if f"breast_mri_{var_value.lower()}_pre_" in filename.lower():
                             file_path = os.path.join(category_dir, filename)
                             file_info = {
                                 'filename': filename,
@@ -442,6 +446,11 @@ def extract_nrrd_segmentation_masks(patient_id):
         segmentation_data['summary']['mask_types'].append('dense_tissue_vessels')
     
     return segmentation_data
+
+def check_patient_has_segmentation_masks(patient_id):
+    """Quick check if patient has any segmentation masks available"""
+    nrrd_data = extract_nrrd_segmentation_masks(patient_id)
+    return nrrd_data['found_masks']
 
 def get_dataset_split(patient_id, train_df, test_df):
     """Determine if patient is in train or test split"""
@@ -696,26 +705,45 @@ def copy_nrrd_segmentation_masks(patient_id, export_patient_dir, nrrd_data):
     
     return copied_count
 
-def export_patients(selected_patients, all_data):
-    """Export complete data for selected patients"""
+def export_patients(selected_train_patients, selected_test_patients, all_data):
+    """Export complete data for selected patients into train and test folders"""
     os.makedirs(EXPORT_DIR, exist_ok=True)
-    exported_patients = {}
+    
+    # Create train and test directories
+    train_dir = os.path.join(EXPORT_DIR, 'train')
+    test_dir = os.path.join(EXPORT_DIR, 'test')
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(test_dir, exist_ok=True)
+    
+    exported_patients = {'train': {}, 'test': {}}
+    total_patients = len(selected_train_patients) + len(selected_test_patients)
     
     print(f"\n{'='*60}")
-    print(f"EXPORTING {len(selected_patients)} PATIENTS")
-    print(f"{'='*60}\n")
+    print(f"EXPORTING {total_patients} PATIENTS")
+    print(f"{'='*60}")
+    print(f"Training patients: {len(selected_train_patients)}")
+    print(f"Test patients: {len(selected_test_patients)}")
+    print()
     
-    for i, patient_id in enumerate(selected_patients):
-        print(f"[{i+1}/{len(selected_patients)}] Processing Patient {patient_id}")
+    # Process training patients
+    patient_count = 0
+    for i, patient_id in enumerate(selected_train_patients):
+        patient_count += 1
+        print(f"[{patient_count}/{total_patients}] Processing TRAIN Patient {patient_id}")
         print("-" * 40)
         
         try:
             # Extract patient data
             patient_data = extract_patient_data(patient_id, all_data)
             
-            # Create patient directory
+            # Double-check that patient has segmentation masks
+            if not patient_data['nrrd_segmentation_masks']['found_masks']:
+                print(f"  ⚠️  Patient {patient_id} has no segmentation masks, skipping...\n")
+                continue
+            
+            # Create patient directory in train folder
             normalized_id = normalize_patient_id(patient_id)
-            patient_dir = os.path.join(EXPORT_DIR, f'Patient_{normalized_id}')
+            patient_dir = os.path.join(train_dir, f'Patient_{normalized_id}')
             os.makedirs(patient_dir, exist_ok=True)
             
             # Save patient JSON
@@ -731,11 +759,50 @@ def export_patients(selected_patients, all_data):
             copied_masks = copy_nrrd_segmentation_masks(patient_id, patient_dir, patient_data['nrrd_segmentation_masks'])
             patient_data['copied_nrrd_masks'] = copied_masks
             
-            exported_patients[normalized_id] = patient_data
-            print(f"  ✓ Successfully exported Patient {normalized_id}\n")
+            exported_patients['train'][normalized_id] = patient_data
+            print(f"  ✓ Successfully exported TRAIN Patient {normalized_id}\n")
             
         except Exception as e:
-            print(f"  ✗ Error exporting Patient {patient_id}: {e}\n")
+            print(f"  ✗ Error exporting TRAIN Patient {patient_id}: {e}\n")
+    
+    # Process test patients
+    for i, patient_id in enumerate(selected_test_patients):
+        patient_count += 1
+        print(f"[{patient_count}/{total_patients}] Processing TEST Patient {patient_id}")
+        print("-" * 40)
+        
+        try:
+            # Extract patient data
+            patient_data = extract_patient_data(patient_id, all_data)
+            
+            # Double-check that patient has segmentation masks
+            if not patient_data['nrrd_segmentation_masks']['found_masks']:
+                print(f"  ⚠️  Patient {patient_id} has no segmentation masks, skipping...\n")
+                continue
+            
+            # Create patient directory in test folder
+            normalized_id = normalize_patient_id(patient_id)
+            patient_dir = os.path.join(test_dir, f'Patient_{normalized_id}')
+            os.makedirs(patient_dir, exist_ok=True)
+            
+            # Save patient JSON
+            json_path = os.path.join(patient_dir, 'patient_data.json')
+            with open(json_path, 'w') as f:
+                json.dump(patient_data, f, indent=2, default=str)
+            
+            # Copy MRI files
+            copied_files = copy_mri_files(patient_id, patient_dir)
+            patient_data['copied_dicom_files'] = copied_files
+            
+            # Copy NRRD segmentation masks
+            copied_masks = copy_nrrd_segmentation_masks(patient_id, patient_dir, patient_data['nrrd_segmentation_masks'])
+            patient_data['copied_nrrd_masks'] = copied_masks
+            
+            exported_patients['test'][normalized_id] = patient_data
+            print(f"  ✓ Successfully exported TEST Patient {normalized_id}\n")
+            
+        except Exception as e:
+            print(f"  ✗ Error exporting TEST Patient {patient_id}: {e}\n")
     
     # Save summary files
     try:
@@ -745,35 +812,37 @@ def export_patients(selected_patients, all_data):
         
         # CSV summary
         summary_data = []
-        for patient_id, data in exported_patients.items():
-            nrrd_summary = data['nrrd_segmentation_masks']['summary'] if data['nrrd_segmentation_masks']['found_masks'] else {
-                'total_nrrd_masks': 0, 'mask_types': [], 'data_versions_found': [], 'v2_masks_count': 0, 'v3_masks_count': 0
-            }
-            
-            summary_row = {
-                'Patient_ID': patient_id,
-                'Patient_ID_Full': data['patient_id_full'],
-                'Dataset_Split': data['dataset_split'],
-                'Has_Clinical_Data': bool(data['demographic_clinical']),
-                'Num_Clinical_Fields': len(data['demographic_clinical']),
-                'Has_Imaging_Features': bool(data['imaging_features']),
-                'Num_Imaging_Features': len(data['imaging_features']),
-                'Has_Annotations': bool(data['annotations']),
-                'Num_Annotations': len(data['annotations']),
-                'Total_Annotated_Volume': data['annotation_summary'].get('total_volume', 0),
-                'Has_Density_Assessment': bool(data['density_assessment']),
-                'Num_MRI_File_Mappings': len(data['mri_files']),
-                'Num_Segmentation_Files': len(data['segmentation_files']),
-                'Segmentation_Labels': ', '.join(data['segmentation_labels']),
-                'Copied_DICOM_Files': data.get('copied_dicom_files', 0),
-                'Has_NRRD_Masks': bool(data['nrrd_segmentation_masks']['found_masks']),
-                'Total_NRRD_Masks': nrrd_summary['total_nrrd_masks'],
-                'NRRD_Data_Versions': ', '.join(nrrd_summary['data_versions_found']),
-                'NRRD_v2_Masks': nrrd_summary['v2_masks_count'],
-                'NRRD_v3_Masks': nrrd_summary['v3_masks_count'],
-                'NRRD_Mask_Types': ', '.join(nrrd_summary['mask_types']),
-                'Copied_NRRD_Masks': data.get('copied_nrrd_masks', 0)
-            }
+        for split in ['train', 'test']:
+            for patient_id, data in exported_patients[split].items():
+                nrrd_summary = data['nrrd_segmentation_masks']['summary'] if data['nrrd_segmentation_masks']['found_masks'] else {
+                    'total_nrrd_masks': 0, 'mask_types': [], 'data_versions_found': [], 'v2_masks_count': 0, 'v3_masks_count': 0
+                }
+                
+                summary_row = {
+                    'Patient_ID': patient_id,
+                    'Patient_ID_Full': data['patient_id_full'],
+                    'Dataset_Split': data['dataset_split'],
+                    'Export_Split': split,
+                    'Has_Clinical_Data': bool(data['demographic_clinical']),
+                    'Num_Clinical_Fields': len(data['demographic_clinical']),
+                    'Has_Imaging_Features': bool(data['imaging_features']),
+                    'Num_Imaging_Features': len(data['imaging_features']),
+                    'Has_Annotations': bool(data['annotations']),
+                    'Num_Annotations': len(data['annotations']),
+                    'Total_Annotated_Volume': data['annotation_summary'].get('total_volume', 0),
+                    'Has_Density_Assessment': bool(data['density_assessment']),
+                    'Num_MRI_File_Mappings': len(data['mri_files']),
+                    'Num_Segmentation_Files': len(data['segmentation_files']),
+                    'Segmentation_Labels': ', '.join(data['segmentation_labels']),
+                    'Copied_DICOM_Files': data.get('copied_dicom_files', 0),
+                    'Has_NRRD_Masks': bool(data['nrrd_segmentation_masks']['found_masks']),
+                    'Total_NRRD_Masks': nrrd_summary['total_nrrd_masks'],
+                    'NRRD_Data_Versions': ', '.join(nrrd_summary['data_versions_found']),
+                    'NRRD_v2_Masks': nrrd_summary['v2_masks_count'],
+                    'NRRD_v3_Masks': nrrd_summary['v3_masks_count'],
+                    'NRRD_Mask_Types': ', '.join(nrrd_summary['mask_types']),
+                    'Copied_NRRD_Masks': data.get('copied_nrrd_masks', 0)
+                }
             summary_data.append(summary_row)
         
         summary_df = pd.DataFrame(summary_data)
@@ -806,25 +875,99 @@ def main():
         print("ERROR: No patients found!")
         return
     
-    # Select patients
-    if len(available_patients) < NUM_PATIENTS:
-        selected = available_patients
-        print(f"\nOnly {len(available_patients)} patients available, selecting all")
-    else:
-        selected = random.sample(available_patients, NUM_PATIENTS)
-        print(f"\nRandomly selected {NUM_PATIENTS} patients")
+    # Filter patients to only those with segmentation masks
+    # print("\nFiltering patients with segmentation masks...")
+    patients_with_masks = []
+    patients_without_masks = []
     
-    print(f"Selected patients: {selected}")
+    for patient_id in available_patients:
+        # print(f"  Checking patient {patient_id}...", end=" ")
+        if check_patient_has_segmentation_masks(patient_id):
+            patients_with_masks.append(patient_id)
+            # print("✓ Has segmentation masks")
+        else:
+            patients_without_masks.append(patient_id)
+            # print("✗ No segmentation masks")
+    
+    print(f"\nFound {len(patients_with_masks)} patients with segmentation masks")
+    print(f"Found {len(patients_without_masks)} patients without segmentation masks")
+    
+    if not patients_with_masks:
+        print("ERROR: No patients with segmentation masks found!")
+        return
+    
+    # Separate patients by train/test split
+    print("\nDetermining train/test splits for patients with masks...")
+    train_patients = []
+    test_patients = []
+    unknown_patients = []
+    
+    for patient_id in patients_with_masks:
+        split = get_dataset_split(patient_id, all_data['train_ids'], all_data['test_ids'])
+        if split == 'train':
+            train_patients.append(patient_id)
+        elif split == 'test':
+            test_patients.append(patient_id)
+        else:
+            unknown_patients.append(patient_id)
+    
+    print(f"\nDataset split breakdown:")
+    print(f"  Train patients with masks: {len(train_patients)}")
+    print(f"  Test patients with masks: {len(test_patients)}")
+    print(f"  Unknown split patients with masks: {len(unknown_patients)}")
+    
+    # Select patients from train and test sets
+    selected_train = []
+    selected_test = []
+    
+    # Select training patients
+    if len(train_patients) < NUM_TRAIN_PATIENTS:
+        selected_train = train_patients
+        print(f"\nOnly {len(train_patients)} train patients with masks available, selecting all")
+    else:
+        selected_train = random.sample(train_patients, NUM_TRAIN_PATIENTS)
+        print(f"\nRandomly selected {NUM_TRAIN_PATIENTS} training patients from {len(train_patients)} available")
+    
+    # Select test patients
+    if len(test_patients) < NUM_TEST_PATIENTS:
+        selected_test = test_patients
+        print(f"Only {len(test_patients)} test patients with masks available, selecting all")
+    else:
+        selected_test = random.sample(test_patients, NUM_TEST_PATIENTS)
+        print(f"Randomly selected {NUM_TEST_PATIENTS} test patients from {len(test_patients)} available")
+    
+    print(f"\nSelected patients breakdown:")
+    print(f"  Training patients ({len(selected_train)}): {selected_train}")
+    print(f"  Test patients ({len(selected_test)}): {selected_test}")
+    print(f"  Total selected: {len(selected_train) + len(selected_test)} patients")
+    
+    if not selected_train and not selected_test:
+        print("ERROR: No patients selected for export!")
+        return
+    
+    if patients_without_masks:
+        print(f"\nPatients without segmentation masks (skipped): {patients_without_masks[:10]}")
+        if len(patients_without_masks) > 10:
+            print(f"... and {len(patients_without_masks) - 10} more")
     
     # Export
-    exported = export_patients(selected, all_data)
+    exported = export_patients(selected_train, selected_test, all_data)
     
     # Final summary
     print(f"\n{'='*60}")
     print(f"EXPORT COMPLETED")
     print(f"{'='*60}")
     print(f"Location: {EXPORT_DIR}")
-    print(f"Patients exported: {len(exported)}")
+    print(f"Training patients exported: {len(exported['train'])} (in train/ folder)")
+    print(f"Test patients exported: {len(exported['test'])} (in test/ folder)")
+    print(f"Total patients exported: {len(exported['train']) + len(exported['test'])}")
+    print(f"\nDataset statistics:")
+    print(f"  Total train patients with masks: {len(train_patients)}")
+    print(f"  Total test patients with masks: {len(test_patients)}")
+    print(f"  Patients without segmentation masks: {len(patients_without_masks)}")
+    print(f"\nExport structure:")
+    print("  - train/ (training patients)")
+    print("  - test/ (test patients)")
     print(f"\nEach patient folder contains:")
     print("  - patient_data.json (comprehensive data)")
     print("  - MRI_DICOM_sample/ (sample DICOM files + inventory)")

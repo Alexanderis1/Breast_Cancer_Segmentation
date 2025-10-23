@@ -1,0 +1,56 @@
+======================================================================
+INSPECTING NRRD FILES - TEST
+======================================================================
+
+Patient: Patient_197
+
+Found 6 NRRD files:
+
+1. v2_breast_test_Breast_MRI_197_pre_032.nrrd
+   Shape: (448, 448, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.1377, Std: 0.3446
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+2. v2_breast_test_Breast_MRI_197_pre_095.nrrd
+   Shape: (448, 448, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.2653, Std: 0.4415
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+3. v2_breast_test_Breast_MRI_197_pre_121.nrrd
+   Shape: (448, 448, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.2434, Std: 0.4291
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+4. v2_dense_tissue_test_Breast_MRI_197_pre_061.nrrd
+   Shape: (448, 448, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.0142, Std: 0.1184
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+5. v2_dense_tissue_test_Breast_MRI_197_pre_084.nrrd
+   Shape: (448, 448, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.0064, Std: 0.0797
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
+6. v2_dense_tissue_test_Breast_MRI_197_pre_132.nrrd
+   Shape: (448, 448, 1)
+   Data type: uint8
+   Value range: [0.0, 1.0]
+   Mean: 0.0090, Std: 0.0943
+   Unique values: [0.0, 1.0]
+   Number of unique classes: 2
+
