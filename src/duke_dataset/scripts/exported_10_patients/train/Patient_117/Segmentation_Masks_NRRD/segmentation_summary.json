@@ -1,0 +1,28 @@
+{
+  "total_copied_masks": 6,
+  "data_versions_found": [
+    "v2"
+  ],
+  "v2_data": {
+    "breast_train": 3,
+    "breast_test": 0,
+    "dense_tissue_train": 3,
+    "dense_tissue_test": 0,
+    "source_directory": "/mnt/c/Users/35193/Desktop/duke_dataset/data/PKG - Duke-Breast-Cancer-MRI-Supplement-v2/Duke-Breast-Cancer-MRI-Supplement-v2/Segmentation_Masks_NRRD"
+  },
+  "v3_data": {
+    "breast_masks": 0,
+    "dense_and_vessels_masks": 0,
+    "source_directory": "/mnt/c/Users/35193/Desktop/duke_dataset/data/PKG - Duke-Breast-Cancer-MRI-Supplement-v3/Duke-Breast-Cancer-MRI-Supplement-v3/Segmentation_Masks_NRRD"
+  },
+  "file_naming_conventions": {
+    "v2": "v2_{mask_type}_{split}_{original_filename}",
+    "v3": "v3_{original_filename}"
+  },
+  "mask_descriptions": {
+    "v2_breast": "Breast tissue masks from v2 dataset (split by train/test)",
+    "v2_dense_tissue": "Dense tissue masks from v2 dataset (split by train/test)",
+    "v3_breast": "Breast tissue masks from v3 dataset (individual patient folders)",
+    "v3_dense_and_vessels": "Combined dense tissue and blood vessel masks from v3 dataset"
+  }
+}

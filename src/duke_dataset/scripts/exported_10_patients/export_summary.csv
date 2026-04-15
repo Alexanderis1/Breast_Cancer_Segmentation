@@ -1,0 +1,3 @@
+Patient_ID,Patient_ID_Full,Dataset_Split,Export_Split,Has_Clinical_Data,Num_Clinical_Fields,Has_Imaging_Features,Num_Imaging_Features,Has_Annotations,Num_Annotations,Total_Annotated_Volume,Has_Density_Assessment,Num_MRI_File_Mappings,Num_Segmentation_Files,Segmentation_Labels,Copied_DICOM_Files,Has_NRRD_Masks,Total_NRRD_Masks,NRRD_Data_Versions,NRRD_v2_Masks,NRRD_v3_Masks,NRRD_Mask_Types,Copied_NRRD_Masks
+117,Breast_MRI_117,train,train,True,95,True,530,True,1,30400,False,794,6,"Mammary Fibroglandular Tissue, Fatty tissue of breast",1,True,6,v2,6,0,"breast, dense_tissue_vessels",6
+197,Breast_MRI_197,test,test,True,87,True,530,True,1,563160,True,769,6,"Mammary Fibroglandular Tissue, Fatty tissue of breast",1,True,6,v2,6,0,"breast, dense_tissue_vessels",6

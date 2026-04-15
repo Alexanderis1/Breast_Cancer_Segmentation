@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /mnt/c/Users/35193/Desktop/Sapienza/1 year/Second Semester/Medical Robotics/Project/Breast_Cancer_Segmentation/src/duke_dataset/scripts/)"
+    ]
+  }
+}
